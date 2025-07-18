@@ -92,7 +92,7 @@ def summary_insight(rsi, volume_ratio, sentiment):
     else:
         insight.append("Mixed sentiment.")
 
-    return "✅ Summary: " + " ".join(insight)
+    return "✅" + " ".join(insight)
 
 def get_rsi_yf(ticker, period=14):
     try:
@@ -271,24 +271,16 @@ def main():
         recommendation = make_recommendation(change, sentiment, rsi, volume_ratio)
         summary = summary_insight(rsi, volume_ratio, sentiment)
 
-        # ✂️ Split summary into two lines
-        summary_lines = summary.strip().split(". ")
-        summary_line1 = summary_lines[0].strip() + "." if summary_lines else ""
-        summary_line2 = ". ".join(summary_lines[1:]).strip()
-        if summary_line2 and not summary_line2.endswith("."):
-            summary_line2 += "."
-
         direction = "dropped" if change < 0 else "rose"
-        price_str = f"${latest:.2f}, {change:+.2f}%"
+        price_str = f"${latest:.2f},   {change:+.2f}%"
 
         # Telegram formatted message (monospace block)
         tg_msg = (
-            f"{ticker} ({price_str})\n"
+            f"{ticker} {direction} by - ({price_str})\n"
             f"\tRSI:            {rsi}\n"
             f"\tVolume Ratio:   {round(volume_ratio, 2)}\n"
             f"\tSentiment:      {sentiment}\n"
-            f"\tSummary:        {summary_line1}\n"
-            f"\t                {summary_line2}\n"
+            f"\tSummary:        {summary}\n"
             f"\tRecommendation: {recommendation}"
         )
         telegram_messages.append(tg_msg)
