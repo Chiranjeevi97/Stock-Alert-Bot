@@ -211,13 +211,18 @@ def send_telegram(message):
     else:
         print("⚠️ Telegram credentials not set.")
 
-def send_email(subject, message):
+def send_email(subject, message, html=False):
     if EMAIL_FROM and EMAIL_TO and EMAIL_APP_PASSWORD:
         msg = EmailMessage()
         msg['Subject'] = subject
         msg['From'] = EMAIL_FROM
         msg['To'] = EMAIL_TO
-        msg.set_content(message)
+
+        if html:
+            msg.set_content("This email requires an HTML-compatible client.")
+            msg.add_alternative(message, subtype='html')
+        else:
+            msg.set_content(message)
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
             smtp.login(EMAIL_FROM, EMAIL_APP_PASSWORD)
