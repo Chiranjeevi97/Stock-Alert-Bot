@@ -19,6 +19,9 @@ EMAIL_FROM = os.getenv("EMAIL_FROM")
 EMAIL_TO = os.getenv("EMAIL_TO")
 EMAIL_APP_PASSWORD = os.getenv("EMAIL_APP_PASSWORD")
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
+ALPHAVANTAGE_KEY = os.getenv("ALPHAVANTAGE_KEY")
+FINNHUB_KEY = os.getenv("FINNHUB_KEY")
+TWELVE_DATA_KEY = os.getenv("TWELVE_DATA_KEY")
 FORCE_TEST_ALERT = os.getenv("FORCE_TEST_ALERT", "false").lower() == "true"
 
 def load_config():
@@ -53,16 +56,130 @@ def get_price_change(ticker):
 
     return round(change, 2), previous_close, latest_close, (current_volume / avg_volume)
 
-def get_rsi(ticker, period=14):
-    data = yf.Ticker(ticker).history(period="30d")
-    if data.empty or len(data) < period:
+def summary_insight(rsi, volume_ratio, sentiment):
+    insight = []
+
+    # Interpret RSI
+    if rsi is None:
+        rsi_summary = "No RSI data available"
+    elif rsi < 30:
+        rsi_summary = f"RSI at {rsi} signals oversold territory."
+    elif rsi < 50:
+        rsi_summary = f"Hovering around {rsi}, in neutral-to-buy zone."
+    elif rsi < 70:
+        rsi_summary = f"Hovering around {rsi}, in neutral-to-sell zone."
+    else:
+        rsi_summary = f"RSI at {rsi} indicates strong overbought conditions."
+
+    insight.append(rsi_summary)
+
+    # Volume insight
+    if volume_ratio is not None:
+        if volume_ratio > 2:
+            insight.append(f"Volume surging (~{round(volume_ratio, 1)}x avg).")
+        elif volume_ratio > 1.2:
+            insight.append(f"Volume above average (~{round(volume_ratio, 1)}x).")
+        else:
+            insight.append("Volume within normal range.")
+
+    # Sentiment interpretation
+    if sentiment > 0.4:
+        insight.append("Sentiment clearly positive.")
+    elif sentiment < -0.4:
+        insight.append("Sentiment strongly negative.")
+    elif abs(sentiment) <= 0.15:
+        insight.append("Sentiment neutral.")
+    else:
+        insight.append("Mixed sentiment.")
+
+    return "✅ Summary: " + " ".join(insight)
+
+def get_rsi_yf(ticker, period=14):
+    try:
+        data = yf.Ticker(ticker).history(period="30d")
+        if data.empty or len(data) < period:
+            return None
+        delta = data['Close'].diff()
+        gain = delta.where(delta > 0, 0).rolling(window=period).mean()
+        loss = -delta.where(delta < 0, 0).rolling(window=period).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        return round(rsi.iloc[-1], 2)
+    except Exception as e:
+        print(f"⚠️ RSI (yfinance) failed for {ticker}: {e}")
         return None
-    delta = data['Close'].diff()
-    gain = delta.where(delta > 0, 0).rolling(window=period).mean()
-    loss = -delta.where(delta < 0, 0).rolling(window=period).mean()
-    rs = gain / loss
-    rsi = 100 - (100 / (1 + rs))
-    return round(rsi.iloc[-1], 2)
+
+def get_rsi_alpha_vantage(ticker, interval="daily", time_period=14):
+    try:
+        url = (f"https://www.alphavantage.co/query?"
+               f"function=RSI&symbol={ticker}&interval={interval}&"
+               f"time_period={time_period}&series_type=close&apikey={ALPHAVANTAGE_KEY}")
+        res = requests.get(url)
+        data = res.json()
+        rsi_data = data.get("Technical Analysis: RSI", {})
+        if not rsi_data:
+            return None
+        latest = sorted(rsi_data.keys())[-1]
+        return round(float(rsi_data[latest]["RSI"]), 2)
+    except Exception as e:
+        print(f"⚠️ RSI (Alpha Vantage) failed for {ticker}: {e}")
+        return None
+
+def get_rsi_finnhub(ticker, resolution="D", period=14):
+    try:
+        url = f"https://finnhub.io/api/v1/indicator?symbol={ticker}&resolution={resolution}&indicator=rsi&timeperiod={period}&token={FINNHUB_KEY}"
+        res = requests.get(url)
+        data = res.json()
+        if 'rsi' in data and 'result' in data and data['rsi'] and data['rsi'][-1]:
+            return round(data['rsi'][-1], 2)
+    except Exception as e:
+        print(f"⚠️ RSI (Finnhub) failed for {ticker}: {e}")
+    return None
+
+def get_rsi_twelve_data(ticker, interval="1day", time_period=14):
+    try:
+        url = f"https://api.twelvedata.com/rsi?symbol={ticker}&interval={interval}&time_period={time_period}&apikey={TWELVE_DATA_KEY}"
+        res = requests.get(url)
+        data = res.json()
+        if 'value' in data and data['value']:
+            return round(float(data['value']), 2)
+    except Exception as e:
+        print(f"⚠️ RSI (Twelve Data) failed for {ticker}: {e}")
+    return None
+def get_multi_rsi(ticker):
+    rsi_sources = []
+
+    # yFinance
+    yf_rsi = get_rsi_yf(ticker)
+    if yf_rsi is not None:
+        print(f"✅ yFinance RSI for {ticker}: {yf_rsi}")
+        rsi_sources.append(yf_rsi)
+
+    # Alpha Vantage
+    av_rsi = get_rsi_alpha_vantage(ticker)
+    if av_rsi is not None:
+        print(f"✅ AlphaVantage RSI for {ticker}: {av_rsi}")
+        rsi_sources.append(av_rsi)
+
+    # Finnhub
+    finnhub_rsi = get_rsi_finnhub(ticker)
+    if finnhub_rsi is not None:
+        print(f"✅ Finnhub RSI for {ticker}: {finnhub_rsi}")
+        rsi_sources.append(finnhub_rsi)
+
+    # Twelve Data
+    td_rsi = get_rsi_twelve_data(ticker)
+    if td_rsi is not None:
+        print(f"✅ TwelveData RSI for {ticker}: {td_rsi}")
+        rsi_sources.append(td_rsi)
+
+    if not rsi_sources:
+        print(f"❌ No RSI sources succeeded for {ticker}.")
+        return None
+
+    avg_rsi = round(sum(rsi_sources) / len(rsi_sources), 2)
+    print(f"🎯 Final RSI for {ticker} (avg of {len(rsi_sources)}): {avg_rsi}")
+    return avg_rsi
 
 def get_news(ticker):
     url = f"https://newsapi.org/v2/everything?q={ticker}&apiKey={NEWSAPI_KEY}&sortBy=publishedAt"
@@ -142,15 +259,17 @@ def main():
         if change is None or (change > -min_drop and not FORCE_TEST_ALERT):
             continue
 
-        rsi = get_rsi(ticker)
+        rsi = get_multi_rsi(ticker)
         news = get_news(ticker)
         sentiment = analyze_sentiment(news)
         recommendation = make_recommendation(change, sentiment, rsi, volume_ratio)
 
         direction = "dropped" if change < 0 else "rose"
+        summary = summary_insight(rsi, volume_ratio, sentiment)
         msg = (f"📊 {ticker} {direction} {change}%\n"
                f"💹 RSI: {rsi}, Volume Ratio: {round(volume_ratio, 2)}\n"
                f"📰 Sentiment: {sentiment}\n"
+               f"{summary}\n"
                f"✅ {recommendation}")
         messages.append(msg)
 
