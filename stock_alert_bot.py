@@ -252,7 +252,8 @@ def main():
         print("⚠️ No stocks loaded from config.")
         return
 
-    messages = []
+    telegram_messages = []
+    email_messages = []
 
     for ticker, min_drop in stocks.items():
         change, prev, latest, volume_ratio = get_price_change(ticker)
@@ -263,26 +264,51 @@ def main():
         news = get_news(ticker)
         sentiment = analyze_sentiment(news)
         recommendation = make_recommendation(change, sentiment, rsi, volume_ratio)
+        summary = summary_insight(rsi, volume_ratio, sentiment)
 
         direction = "dropped" if change < 0 else "rose"
-        summary = summary_insight(rsi, volume_ratio, sentiment)
-        msg = (f"📊 {ticker} {direction} {change}%\n"
-               f"💹 RSI: {rsi}, Volume Ratio: {round(volume_ratio, 2)}\n"
-               f"📰 Sentiment: {sentiment}\n"
-               f"{summary}\n"
-               f"✅ {recommendation}")
-        messages.append(msg)
+
+        # Telegram formatted message (monospace)
+        tg_msg = (
+            f"```\n"
+            f"{ticker} {direction} ({change:+.2f}%)\n"
+            f"    RSI:            {rsi}\n"
+            f"    Volume Ratio:   {round(volume_ratio, 2)}\n"
+            f"    Sentiment:      {sentiment}\n"
+            f"    Summary:        {summary}\n"
+            f"    Recommendation: {recommendation}"
+            f"```"
+        )
+        telegram_messages.append(tg_msg)
+
+        # Email formatted message (Markdown-style)
+        news_bullets = "\n".join([f"- {a['title']}" for a in news])
+        em_msg = (
+            f"# {ticker} {direction.upper()} ({change:+.2f}%)\n"
+            f"**RSI:** {rsi}  \n"
+            f"**Volume Ratio:** {round(volume_ratio, 2)}  \n"
+            f"**Sentiment:** {sentiment}  \n"
+            f"**Current Price:** ${latest}  \n"
+            f"**Previous Close:** ${prev}  \n"
+            f"**Recommendation:** {recommendation}  \n\n"
+            f"### Insight Summary\n{summary}\n\n"
+            f"### Top News Headlines\n{news_bullets}\n"
+        )
+        email_messages.append(em_msg)
 
         log_alert(ticker, change, sentiment, rsi, volume_ratio, recommendation, latest)
 
-    if not messages:
+    if not telegram_messages:
         print("✅ No alerts triggered.")
         return
 
-    final_msg = "\n\n".join(messages)
-    print("✅ Alerts to be sent:\n", final_msg)
-    send_telegram(final_msg)
-    send_email("📉 Stock Alert Summary", final_msg)
+    # Combine and send alerts
+    final_telegram = "\n\n".join(telegram_messages)
+    final_email = "\n\n---\n\n".join(email_messages)
+
+    print("✅ Alerts to be sent:\n", final_telegram)
+    send_telegram(final_telegram)
+    send_email("📉 Stock Alert Summary", final_email)
 
 if __name__ == "__main__":
     main()
