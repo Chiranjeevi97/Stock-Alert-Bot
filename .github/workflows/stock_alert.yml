@@ -2,12 +2,13 @@ name: Stock Alert Bot
 
 on:
   schedule:
-    - cron: "*/10 * * * *"  # Every 10 mins UTC
-  workflow_dispatch:  # Allow manual run
+    - cron: "*/5 12-22 * * 1-5"  # every 5 min between 7am–5pm EST, Mon–Fri
+  workflow_dispatch:  # allows manual triggering
 
 jobs:
-  alert:
+  run-alert:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -15,16 +16,20 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: 3.10
 
       - name: Install dependencies
         run: |
-          pip install yfinance python-telegram-bot==13.15
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Run stock alert bot
-        run: python stock_alert_bot.py
+      - name: Run Stock Alert Bot
         env:
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+          NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
+          FORCE_TEST_ALERT: ${{ secrets.FORCE_TEST_ALERT }}
+        run: python stock_alert.py

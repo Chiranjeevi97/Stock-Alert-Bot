@@ -1,75 +1,115 @@
-import os
 import yfinance as yf
+import requests
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import smtplib
-from email.mime.text import MIMEText
-from datetime import datetime
+from email.message import EmailMessage
 from telegram import Bot
+import os
+import json
+from datetime import datetime
+import pytz
 
-# ==== CONFIG FROM ENV ====
-EMAIL_FROM = os.environ.get('EMAIL_FROM')
-EMAIL_TO = os.environ.get('EMAIL_FROM')  # sending to same address
-EMAIL_APP_PASSWORD = os.environ.get('EMAIL_APP_PASSWORD')
+CONFIG_FILE = "stocks.json"
 
-TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
-TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+EMAIL_FROM = os.getenv("EMAIL_FROM")
+EMAIL_TO = os.getenv("EMAIL_TO")
+EMAIL_APP_PASSWORD = os.getenv("EMAIL_APP_PASSWORD")
+NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
+FORCE_TEST_ALERT = os.getenv("FORCE_TEST_ALERT", "false").lower() == "true"
 
-STOCKS = {
-    'NVDA': (1, 3),
-    'MSFT': (1, 3),
-    'TSLA': (2, 5),
-    'GOOGL': (2, 5),
-    'META': (2, 5),
-    'RDDT': (1, 3)
-}
-# ==========================
+def load_config():
+    try:
+        with open(CONFIG_FILE) as f:
+            config = json.load(f)
+        return config.get("stocks", {})
+    except Exception as e:
+        print(f"⚠️ Failed to load config: {e}")
+        return {}
 
-def send_email(subject, body):
-    msg = MIMEText(body)
-    msg['Subject'] = subject
-    msg['From'] = EMAIL_FROM
-    msg['To'] = EMAIL_TO
+def within_market_hours():
+    eastern = pytz.timezone("US/Eastern")
+    now = datetime.now(eastern)
+    return 7 <= now.hour < 17  # 7 AM to 5 PM EST
 
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-        server.login(EMAIL_FROM, EMAIL_APP_PASSWORD)
-        server.sendmail(EMAIL_FROM, EMAIL_TO, msg.as_string())
-        print("Email sent!")
+def get_price_change(ticker):
+    data = yf.Ticker(ticker).history(period="2d")
+    if len(data) < 2:
+        return None
+    change = (data['Close'][-1] - data['Close'][-2]) / data['Close'][-2] * 100
+    return round(change, 2)
+
+def get_news(ticker):
+    url = f"https://newsapi.org/v2/everything?q={ticker}&apiKey={NEWSAPI_KEY}&sortBy=publishedAt"
+    res = requests.get(url)
+    return res.json().get('articles', [])[:5]
+
+def analyze_sentiment(articles):
+    analyzer = SentimentIntensityAnalyzer()
+    scores = [analyzer.polarity_scores(a['title'])['compound'] for a in articles]
+    return round(sum(scores) / len(scores), 2) if scores else 0
+
+def make_recommendation(change, sentiment):
+    if change < -2 and sentiment > 0.3:
+        return "📈 Good to Buy"
+    elif change > 2 and sentiment < -0.2:
+        return "📉 Good to Sell"
+    return "📊 Hold"
 
 def send_telegram(message):
-    bot = Bot(token=TELEGRAM_TOKEN)
-    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-    print("Telegram message sent!")
+    if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
+        bot = Bot(token=TELEGRAM_TOKEN)
+        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
+    else:
+        print("⚠️ Telegram credentials not set.")
 
-def check_stocks():
-    alert_messages = []
+def send_email(subject, message):
+    if EMAIL_FROM and EMAIL_TO and EMAIL_APP_PASSWORD:
+        msg = EmailMessage()
+        msg['Subject'] = subject
+        msg['From'] = EMAIL_FROM
+        msg['To'] = EMAIL_TO
+        msg.set_content(message)
 
-    # TEMPORARY FORCED ALERT (for testing)
-    alert_messages.append("✅ Test Alert: This is a forced message for email and Telegram verification.")
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(EMAIL_FROM, EMAIL_APP_PASSWORD)
+            smtp.send_message(msg)
+    else:
+        print("⚠️ Email credentials not set.")
 
-    for symbol, (low, high) in STOCKS.items():
-        ticker = yf.Ticker(symbol)
-        hist = ticker.history(period="2d")
-        if len(hist) < 2:
+def main():
+    if not FORCE_TEST_ALERT and not within_market_hours():
+        print("⏰ Outside market hours. Skipping run.")
+        return
+
+    stocks = load_config()
+    if not stocks:
+        print("⚠️ No stocks loaded from config.")
+        return
+
+    messages = []
+
+    for ticker, min_drop in stocks.items():
+        change = get_price_change(ticker)
+        if change is None or (change > -min_drop and not FORCE_TEST_ALERT):
             continue
 
-        yesterday_close = hist['Close'].iloc[-2]
-        today_price = hist['Close'].iloc[-1]
-        drop_percent = ((yesterday_close - today_price) / yesterday_close) * 100
+        news = get_news(ticker)
+        sentiment = analyze_sentiment(news)
+        recommendation = make_recommendation(change, sentiment)
 
-        if low <= drop_percent <= high:
-            msg = f"{symbol} dropped {drop_percent:.2f}% (from {yesterday_close:.2f} to {today_price:.2f})"
-            alert_messages.append(msg)
+        msg = f"📊 {ticker} dropped {change}%\n📰 Sentiment: {sentiment}\n✅ {recommendation}"
+        messages.append(msg)
 
-    # Debug output
-    print("No alerts triggered.") if not alert_messages else print("Alerts to be sent:", alert_messages)
+    if not messages:
+        print("✅ No alerts triggered.")
+        return
 
-    # Send messages if any alerts exist
-    if alert_messages:
-        combined_msg = "\n".join(alert_messages)
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
-        final_msg = f"[{timestamp}] ALERT:\n{combined_msg}"
-        send_email("📉 Stock Drop Alert", final_msg)
-        send_telegram(final_msg)
+    final_msg = "\n\n".join(messages)
+    print("✅ Alerts to be sent:\n", final_msg)
+    send_telegram(final_msg)
+    send_email("📉 Stock Alert Summary", final_msg)
 
 if __name__ == "__main__":
-    check_stocks()
-
+    main()

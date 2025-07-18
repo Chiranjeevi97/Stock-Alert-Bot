@@ -1,0 +1,9 @@
+{
+    "stocks": {
+        "NVDA": 0.5,
+        "MSFT": 0.5,
+        "TSLA": 2,
+        "GOOGL": 1,
+        "META": 1
+    }
+}
