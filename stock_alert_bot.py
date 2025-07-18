@@ -41,9 +41,13 @@ def send_telegram(message):
 
 def check_stocks():
     alert_messages = []
+
+    # TEMPORARY FORCED ALERT (for testing)
+    alert_messages.append("✅ Test Alert: This is a forced message for email and Telegram verification.")
+
     for symbol, (low, high) in STOCKS.items():
         ticker = yf.Ticker(symbol)
-        hist = ticker.history(period="2d")  # Yesterday and today
+        hist = ticker.history(period="2d")
         if len(hist) < 2:
             continue
 
@@ -55,6 +59,10 @@ def check_stocks():
             msg = f"{symbol} dropped {drop_percent:.2f}% (from {yesterday_close:.2f} to {today_price:.2f})"
             alert_messages.append(msg)
 
+    # Debug output
+    print("No alerts triggered.") if not alert_messages else print("Alerts to be sent:", alert_messages)
+
+    # Send messages if any alerts exist
     if alert_messages:
         combined_msg = "\n".join(alert_messages)
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
