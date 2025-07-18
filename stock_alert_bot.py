@@ -266,18 +266,25 @@ def main():
         recommendation = make_recommendation(change, sentiment, rsi, volume_ratio)
         summary = summary_insight(rsi, volume_ratio, sentiment)
 
-        direction = "dropped" if change < 0 else "rose"
+        # ✂️ Split summary into two lines
+        summary_lines = summary.strip().split(". ")
+        summary_line1 = summary_lines[0].strip() + "." if summary_lines else ""
+        summary_line2 = ". ".join(summary_lines[1:]).strip()
+        if summary_line2 and not summary_line2.endswith("."):
+            summary_line2 += "."
 
-        # Telegram formatted message (monospace)
+        direction = "dropped" if change < 0 else "rose"
+        price_str = f"${latest:.2f}, {change:+.2f}%"
+
+        # Telegram formatted message (monospace block)
         tg_msg = (
-            f"```\n"
-            f"{ticker} {direction} ({change:+.2f}%)\n"
-            f"    RSI:            {rsi}\n"
-            f"    Volume Ratio:   {round(volume_ratio, 2)}\n"
-            f"    Sentiment:      {sentiment}\n"
-            f"    Summary:        {summary}\n"
-            f"    Recommendation: {recommendation}"
-            f"```"
+            f"{ticker} ({price_str})\n"
+            f"\tRSI:            {rsi}\n"
+            f"\tVolume Ratio:   {round(volume_ratio, 2)}\n"
+            f"\tSentiment:      {sentiment}\n"
+            f"\tSummary:        {summary_line1}\n"
+            f"\t                {summary_line2}\n"
+            f"\tRecommendation: {recommendation}"
         )
         telegram_messages.append(tg_msg)
 
@@ -302,8 +309,8 @@ def main():
         print("✅ No alerts triggered.")
         return
 
-    # Combine and send alerts
-    final_telegram = "\n\n".join(telegram_messages)
+    # Combine all Telegram messages into a monospace block
+    final_telegram = "```\n" + "\n--------\n".join(telegram_messages) + "\n```"
     final_email = "\n\n---\n\n".join(email_messages)
 
     print("✅ Alerts to be sent:\n", final_telegram)
