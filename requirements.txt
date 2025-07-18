@@ -1,2 +1,5 @@
 yfinance
+requests
+vaderSentiment
 python-telegram-bot==13.15
+pytz
