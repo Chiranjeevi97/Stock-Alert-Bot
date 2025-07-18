@@ -14,11 +14,12 @@ TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 
 STOCKS = {
-    'NVDA': (2, 5),
+    'NVDA': (1, 3),
     'MSFT': (1, 3),
     'TSLA': (2, 5),
     'GOOGL': (2, 5),
-    'META': (2, 5)
+    'META': (2, 5),
+    'RDDT': (1, 3)
 }
 # ==========================
 
