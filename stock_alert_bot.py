@@ -289,20 +289,24 @@ def main():
         telegram_messages.append(tg_msg)
 
         # Email formatted message (Markdown-style)
-        news_bullets = "\n".join([f"- {a['title']}" for a in news])
+        news_bullets = "".join([f"<li>{a['title']}</li>" for a in news])
         em_msg = (
-            f"# {ticker} {direction.upper()} ({change:+.2f}%)\n"
-            f"**RSI:** {rsi}  \n"
-            f"**Volume Ratio:** {round(volume_ratio, 2)}  \n"
-            f"**Sentiment:** {sentiment}  \n"
-            f"**Current Price:** ${latest}  \n"
-            f"**Previous Close:** ${prev}  \n"
-            f"**Recommendation:** {recommendation}  \n\n"
-            f"### Insight Summary\n{summary}\n\n"
-            f"### Top News Headlines\n{news_bullets}\n"
+            f"<hr>"
+            f"<h2>{ticker} {'DROPPED' if change < 0 else 'ROSE'} ({change:+.2f}%)</h2>"
+            f"<p>"
+            f"<strong>RSI:</strong> {rsi}<br>"
+            f"<strong>Volume Ratio:</strong> {round(volume_ratio, 2)}<br>"
+            f"<strong>Sentiment:</strong> {sentiment}<br>"
+            f"<strong>Current Price:</strong> ${latest:.2f}<br>"
+            f"<strong>Previous Close:</strong> ${prev:.2f}<br>"
+            f"<strong>Recommendation:</strong> {recommendation}"
+            f"</p>"
+            f"<h4>Insight Summary</h4>"
+            f"<p>{summary.replace(chr(10), '<br>')}</p>"
+            f"<h4>Top News Headlines</h4>"
+            f"<ul>{news_bullets}</ul>"
         )
         email_messages.append(em_msg)
-
         log_alert(ticker, change, sentiment, rsi, volume_ratio, recommendation, latest)
 
     if not telegram_messages:
@@ -311,11 +315,11 @@ def main():
 
     # Combine all Telegram messages into a monospace block
     final_telegram = "```\n" + "\n--------\n".join(telegram_messages) + "\n```"
-    final_email = "\n\n---\n\n".join(email_messages)
+    final_email = "".join(email_messages)
 
     print("✅ Alerts to be sent:\n", final_telegram)
     send_telegram(final_telegram)
-    send_email("📉 Stock Alert Summary", final_email)
+    send_email("📉 Stock Alert Summary", final_email, html=True)
 
 if __name__ == "__main__":
     main()
