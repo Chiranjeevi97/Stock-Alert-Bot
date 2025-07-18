@@ -32,4 +32,4 @@ jobs:
           EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
           NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
           FORCE_TEST_ALERT: ${{ secrets.FORCE_TEST_ALERT }}
-        run: python stock_alert.py
+        run: python stock_alert_bot.py
