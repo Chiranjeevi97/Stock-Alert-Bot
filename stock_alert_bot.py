@@ -36,7 +36,14 @@ def load_config():
 def within_market_hours():
     eastern = pytz.timezone("US/Eastern")
     now = datetime.now(eastern)
-    return 7 <= now.hour < 17  # 7 AM to 5 PM EST
+
+    # Ensure it's a weekday
+    if now.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
+        return False
+
+    market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
+    return market_open <= now <= market_close       # 7 AM to 5 PM EST
 
 def get_price_change(ticker):
     data = yf.Ticker(ticker).history(period="5d")
