@@ -143,6 +143,7 @@ def get_rsi_alpha_vantage(ticker, interval="daily", time_period=14):
 
 
 def get_rsi_finnhub(ticker, resolution="D", period=14):
+    print(f"🔍 Calling get_rsi_finnhub for {ticker}...")
     try:
         url = f"https://finnhub.io/api/v1/indicator?symbol={ticker}&resolution={resolution}&indicator=rsi&timeperiod={period}&token={FINNHUB_KEY}"
         res = requests.get(url)
@@ -155,6 +156,7 @@ def get_rsi_finnhub(ticker, resolution="D", period=14):
 
 
 def get_rsi_twelve_data(ticker, interval="1day", time_period=14):
+    print(f"🔍 Calling get_rsi_twelve_data for {ticker}...")
     try:
         url = f"https://api.twelvedata.com/rsi?symbol={ticker}&interval={interval}&time_period={time_period}&apikey={TWELVE_DATA_KEY}"
         res = requests.get(url)
