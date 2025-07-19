@@ -22,7 +22,6 @@ NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 ALPHAVANTAGE_KEY = os.getenv("ALPHAVANTAGE_KEY")
 FINNHUB_KEY = os.getenv("FINNHUB_KEY")
 TWELVE_DATA_KEY = os.getenv("TWELVE_DATA_KEY")
-FORCE_TEST_ALERT = os.getenv("FORCE_TEST_ALERT", "false").lower() == "true"
 
 def load_config():
     try:
@@ -33,17 +32,24 @@ def load_config():
         print(f"⚠️ Failed to load config: {e}")
         return {}
 
-def within_market_hours():
-    eastern = pytz.timezone("US/Eastern")
-    now = datetime.now(eastern)
 
-    # Ensure it's a weekday
-    if now.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
+def within_market_hours():  # 7 AM to 5 PM EST
+    eastern = pytz.timezone("US/Eastern")
+    now = datetime.now().astimezone(eastern)
+    print(f"DEBUG: Current time (Eastern): {now}, Weekday: {now.weekday()}")
+
+    if now.weekday() >= 5:
+        print("DEBUG: Weekend, market closed.")
         return False
 
     market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
     market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
-    return market_open <= now <= market_close       # 7 AM to 5 PM EST
+    if market_open <= now <= market_close:
+        print("DEBUG: Market open.")
+        return True
+    else:
+        print("DEBUG: Market closed.")
+        return False
 
 def get_price_change(ticker):
     data = yf.Ticker(ticker).history(period="5d")
@@ -62,6 +68,7 @@ def get_price_change(ticker):
     current_volume = volume.iloc[-1]
 
     return round(change, 2), previous_close, latest_close, (current_volume / avg_volume)
+
 
 def summary_insight(rsi, volume_ratio, sentiment):
     insight = []
@@ -101,6 +108,7 @@ def summary_insight(rsi, volume_ratio, sentiment):
 
     return "✅" + " ".join(insight)
 
+
 def get_rsi_yf(ticker, period=14):
     try:
         data = yf.Ticker(ticker).history(period="30d")
@@ -115,6 +123,7 @@ def get_rsi_yf(ticker, period=14):
     except Exception as e:
         print(f"⚠️ RSI (yfinance) failed for {ticker}: {e}")
         return None
+
 
 def get_rsi_alpha_vantage(ticker, interval="daily", time_period=14):
     try:
@@ -132,6 +141,7 @@ def get_rsi_alpha_vantage(ticker, interval="daily", time_period=14):
         print(f"⚠️ RSI (Alpha Vantage) failed for {ticker}: {e}")
         return None
 
+
 def get_rsi_finnhub(ticker, resolution="D", period=14):
     try:
         url = f"https://finnhub.io/api/v1/indicator?symbol={ticker}&resolution={resolution}&indicator=rsi&timeperiod={period}&token={FINNHUB_KEY}"
@@ -143,6 +153,7 @@ def get_rsi_finnhub(ticker, resolution="D", period=14):
         print(f"⚠️ RSI (Finnhub) failed for {ticker}: {e}")
     return None
 
+
 def get_rsi_twelve_data(ticker, interval="1day", time_period=14):
     try:
         url = f"https://api.twelvedata.com/rsi?symbol={ticker}&interval={interval}&time_period={time_period}&apikey={TWELVE_DATA_KEY}"
@@ -153,6 +164,8 @@ def get_rsi_twelve_data(ticker, interval="1day", time_period=14):
     except Exception as e:
         print(f"⚠️ RSI (Twelve Data) failed for {ticker}: {e}")
     return None
+
+
 def get_multi_rsi(ticker):
     rsi_sources = []
 
@@ -188,15 +201,18 @@ def get_multi_rsi(ticker):
     print(f"🎯 Final RSI for {ticker} (avg of {len(rsi_sources)}): {avg_rsi}")
     return avg_rsi
 
+
 def get_news(ticker):
     url = f"https://newsapi.org/v2/everything?q={ticker}&apiKey={NEWSAPI_KEY}&sortBy=publishedAt"
     res = requests.get(url)
     return res.json().get('articles', [])[:5]
 
+
 def analyze_sentiment(articles):
     analyzer = SentimentIntensityAnalyzer()
     scores = [analyzer.polarity_scores(a['title'])['compound'] for a in articles]
     return round(sum(scores) / len(scores), 2) if scores else 0
+
 
 def make_recommendation(change, sentiment, rsi, volume_ratio):
     if rsi is None:
@@ -211,12 +227,14 @@ def make_recommendation(change, sentiment, rsi, volume_ratio):
         return "⚠️ Volatile Move - Watch Closely"
     return "📊 Hold"
 
+
 def send_telegram(message):
     if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
         bot = Bot(token=TELEGRAM_TOKEN)
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
     else:
         print("⚠️ Telegram credentials not set.")
+
 
 def send_email(subject, message, html=False):
     if EMAIL_FROM and EMAIL_TO and EMAIL_APP_PASSWORD:
@@ -237,6 +255,7 @@ def send_email(subject, message, html=False):
     else:
         print("⚠️ Email credentials not set.")
 
+
 def log_alert(ticker, change, sentiment, rsi, volume_ratio, recommendation, price):
     log_data = {
         "timestamp": datetime.utcnow().isoformat(),
@@ -254,8 +273,9 @@ def log_alert(ticker, change, sentiment, rsi, volume_ratio, recommendation, pric
     else:
         df.to_csv(ALERT_LOG, mode='a', header=False, index=False)
 
+
 def main():
-    if not FORCE_TEST_ALERT and not within_market_hours():
+    if not within_market_hours():
         print("⏰ Outside market hours. Skipping run.")
         return
 
@@ -269,7 +289,7 @@ def main():
 
     for ticker, min_drop in stocks.items():
         change, prev, latest, volume_ratio = get_price_change(ticker)
-        if change is None or (change > -min_drop and not FORCE_TEST_ALERT):
+        if change is None or (change > -min_drop):
             continue
 
         rsi = get_multi_rsi(ticker)
@@ -324,6 +344,7 @@ def main():
     print("✅ Alerts to be sent:\n", final_telegram)
     send_telegram(final_telegram)
     send_email("📉 Stock Alert Summary", final_email, html=True)
+
 
 if __name__ == "__main__":
     main()
