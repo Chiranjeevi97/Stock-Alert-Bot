@@ -189,14 +189,15 @@ def get_multi_rsi(ticker):
     print(f"🎯 Final RSI for {ticker} (avg of {len(rsi_sources)}): {avg_rsi}")
     return avg_rsi
 
+# ✅ FIXED NEWS FUNCTION
 def get_news(ticker):
     try:
         stock = yf.Ticker(ticker)
         news_items = stock.news[:5]
         formatted_news = []
         for item in news_items:
-            title = item.get('title', 'No Title')
-            link = item.get('link', '#')
+            title = item.get('title') or item.get('headline') or "No Title"
+            link = item.get('link') or item.get('url') or "#"
             formatted_news.append({'title': title, 'link': link})
         return formatted_news
     except Exception as e:
