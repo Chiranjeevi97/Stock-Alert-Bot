@@ -32,8 +32,7 @@ def load_config():
         print(f"⚠️ Failed to load config: {e}")
         return {}
 
-
-def within_market_hours():  # 7 AM to 5 PM EST
+def within_market_hours():
     eastern = pytz.timezone("US/Eastern")
     now = datetime.now().astimezone(eastern)
     print(f"DEBUG: Current time (Eastern): {now}, Weekday: {now.weekday()}")
@@ -43,7 +42,7 @@ def within_market_hours():  # 7 AM to 5 PM EST
         return False
 
     market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
-    market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
+    market_close = now.replace(hour=16, minute=0, microsecond=0)
     if market_open <= now <= market_close:
         print("DEBUG: Market open.")
         return True
@@ -69,11 +68,9 @@ def get_price_change(ticker):
 
     return round(change, 2), previous_close, latest_close, (current_volume / avg_volume)
 
-
 def summary_insight(rsi, volume_ratio, sentiment):
     insight = []
 
-    # Interpret RSI
     if rsi is None:
         rsi_summary = "No RSI data available"
     elif rsi < 30:
@@ -87,7 +84,6 @@ def summary_insight(rsi, volume_ratio, sentiment):
 
     insight.append(rsi_summary)
 
-    # Volume insight
     if volume_ratio is not None:
         if volume_ratio > 2:
             insight.append(f"Volume surging (~{round(volume_ratio, 1)}x avg).")
@@ -96,7 +92,6 @@ def summary_insight(rsi, volume_ratio, sentiment):
         else:
             insight.append("Volume within normal range.")
 
-    # Sentiment interpretation
     if sentiment > 0.4:
         insight.append("Sentiment clearly positive.")
     elif sentiment < -0.4:
@@ -107,7 +102,6 @@ def summary_insight(rsi, volume_ratio, sentiment):
         insight.append("Mixed sentiment.")
 
     return "✅" + " ".join(insight)
-
 
 def get_rsi_yf(ticker, period=14):
     try:
@@ -123,7 +117,6 @@ def get_rsi_yf(ticker, period=14):
     except Exception as e:
         print(f"⚠️ RSI (yfinance) failed for {ticker}: {e}")
         return None
-
 
 def get_rsi_alpha_vantage(ticker, interval="daily", time_period=14):
     try:
@@ -141,7 +134,6 @@ def get_rsi_alpha_vantage(ticker, interval="daily", time_period=14):
         print(f"⚠️ RSI (Alpha Vantage) failed for {ticker}: {e}")
         return None
 
-
 def get_rsi_finnhub(ticker, resolution="D", period=14):
     print(f"🔍 Calling get_rsi_finnhub for {ticker}...")
     try:
@@ -153,7 +145,6 @@ def get_rsi_finnhub(ticker, resolution="D", period=14):
     except Exception as e:
         print(f"⚠️ RSI (Finnhub) failed for {ticker}: {e}")
     return None
-
 
 def get_rsi_twelve_data(ticker, interval="1day", time_period=14):
     print(f"🔍 Calling get_rsi_twelve_data for {ticker}...")
@@ -167,29 +158,24 @@ def get_rsi_twelve_data(ticker, interval="1day", time_period=14):
         print(f"⚠️ RSI (Twelve Data) failed for {ticker}: {e}")
     return None
 
-
 def get_multi_rsi(ticker):
     rsi_sources = []
 
-    # yFinance
     yf_rsi = get_rsi_yf(ticker)
     if yf_rsi is not None:
         print(f"✅ yFinance RSI for {ticker}: {yf_rsi}")
         rsi_sources.append(yf_rsi)
 
-    # Alpha Vantage
     av_rsi = get_rsi_alpha_vantage(ticker)
     if av_rsi is not None:
         print(f"✅ AlphaVantage RSI for {ticker}: {av_rsi}")
         rsi_sources.append(av_rsi)
 
-    # Finnhub
     finnhub_rsi = get_rsi_finnhub(ticker)
     if finnhub_rsi is not None:
         print(f"✅ Finnhub RSI for {ticker}: {finnhub_rsi}")
         rsi_sources.append(finnhub_rsi)
 
-    # Twelve Data
     td_rsi = get_rsi_twelve_data(ticker)
     if td_rsi is not None:
         print(f"✅ TwelveData RSI for {ticker}: {td_rsi}")
@@ -203,24 +189,29 @@ def get_multi_rsi(ticker):
     print(f"🎯 Final RSI for {ticker} (avg of {len(rsi_sources)}): {avg_rsi}")
     return avg_rsi
 
-
 def get_news(ticker):
-    url = f"https://newsapi.org/v2/everything?q={ticker}&apiKey={NEWSAPI_KEY}&sortBy=publishedAt"
-    res = requests.get(url)
-    return res.json().get('articles', [])[:5]
-
+    try:
+        stock = yf.Ticker(ticker)
+        news_items = stock.news[:5]
+        formatted_news = []
+        for item in news_items:
+            title = item.get('title', 'No Title')
+            link = item.get('link', '#')
+            formatted_news.append({'title': title, 'link': link})
+        return formatted_news
+    except Exception as e:
+        print(f"⚠️ Failed to fetch news for {ticker}: {e}")
+        return []
 
 def analyze_sentiment(articles):
     analyzer = SentimentIntensityAnalyzer()
     scores = [analyzer.polarity_scores(a['title'])['compound'] for a in articles]
     return round(sum(scores) / len(scores), 2) if scores else 0
 
-
 def make_recommendation(change, sentiment, rsi, volume_ratio):
     if rsi is None:
-        rsi = 50  # neutral fallback
+        rsi = 50
 
-    # Rules-based logic
     if change < -2 and sentiment > 0.3 and rsi < 35 and volume_ratio > 1:
         return "📈 Buy Opportunity (Dip + Positive News + Oversold + High Volume)"
     elif change > 2 and sentiment < -0.2 and rsi > 70 and volume_ratio > 1:
@@ -229,14 +220,12 @@ def make_recommendation(change, sentiment, rsi, volume_ratio):
         return "⚠️ Volatile Move - Watch Closely"
     return "📊 Hold"
 
-
 def send_telegram(message):
     if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
         bot = Bot(token=TELEGRAM_TOKEN)
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
     else:
         print("⚠️ Telegram credentials not set.")
-
 
 def send_email(subject, message, html=False):
     if EMAIL_FROM and EMAIL_TO and EMAIL_APP_PASSWORD:
@@ -257,7 +246,6 @@ def send_email(subject, message, html=False):
     else:
         print("⚠️ Email credentials not set.")
 
-
 def log_alert(ticker, change, sentiment, rsi, volume_ratio, recommendation, price):
     log_data = {
         "timestamp": datetime.utcnow().isoformat(),
@@ -274,7 +262,6 @@ def log_alert(ticker, change, sentiment, rsi, volume_ratio, recommendation, pric
         df.to_csv(ALERT_LOG, index=False)
     else:
         df.to_csv(ALERT_LOG, mode='a', header=False, index=False)
-
 
 def main():
     if not within_market_hours():
@@ -303,7 +290,6 @@ def main():
         direction = "dropped" if change < 0 else "rose"
         price_str = f"${latest:.2f},   {change:+.2f}%"
 
-        # Telegram formatted message (monospace block)
         tg_msg = (
             f"{ticker} {direction} by - ({price_str})\n"
             f"\tRSI:            {rsi}\n"
@@ -314,8 +300,7 @@ def main():
         )
         telegram_messages.append(tg_msg)
 
-        # Email formatted message (Markdown-style)
-        news_bullets = "".join([f"<li>{a['title']}</li>" for a in news])
+        news_bullets = "".join([f"<li><a href='{a['link']}' target='_blank'>{a['title']}</a></li>" for a in news])
         em_msg = (
             f"<hr>"
             f"<h2>{ticker} {'DROPPED' if change < 0 else 'ROSE'} ({change:+.2f}%)</h2>"
@@ -339,14 +324,12 @@ def main():
         print("✅ No alerts triggered.")
         return
 
-    # Combine all Telegram messages into a monospace block
     final_telegram = "```\n" + "\n--------\n".join(telegram_messages) + "\n```"
     final_email = "".join(email_messages)
 
     print("✅ Alerts to be sent:\n", final_telegram)
     send_telegram(final_telegram)
     send_email("📉 Stock Alert Summary", final_email, html=True)
-
 
 if __name__ == "__main__":
     main()
