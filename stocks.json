@@ -4,6 +4,11 @@
         "MSFT": 0.5,
         "TSLA": 2,
         "GOOGL": 1,
-        "META": 1
+        "META": 1,
+        "ORCL": 1,
+        "WMT": 0.5,
+        "MU": 1,
+        "AAPL": 1,
+        "HOOD": 1
     }
 }
