@@ -2,7 +2,7 @@ name: Stock Alert Bot
 
 on:
   schedule:
-    - cron: "*/25 13-22 * * 1-5"  # every 25 min between 8am–5pm EST, Mon–Fri
+    - cron: "*/10 13-22 * * 1-5"  # every 10 min between 8am–5pm EST, Mon–Fri
   workflow_dispatch:  # allows manual triggering
 
 jobs:
