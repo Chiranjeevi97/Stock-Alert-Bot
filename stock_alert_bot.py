@@ -329,7 +329,7 @@ def main():
     final_email = "".join(email_messages)
 
     print("✅ Alerts to be sent:\n", final_telegram)
-    send_telegram(final_telegram)
+    #send_telegram(final_telegram)
     send_email("📉 Stock Alert Summary", final_email, html=True)
 
 if __name__ == "__main__":
